@@ -47,7 +47,7 @@ discourse_configure_application() {
     sanity_db postgres
     db_ready postgres
     sanity_db redis
-    db_ready redis
+    silent db_ready redis
     ## NOTE Should this be owned by root
     write_file root:"${DISCOURSE_GROUP}" /app/config/discourse.conf:640 <<EOF
 ## nfrastack/discourse Configuration
@@ -313,7 +313,7 @@ EOF
 }
 
 discourse_configure_plugins() {
-    :
+    eval ${PLUGIN_TOOL_COMMAND}
 }
 
 discourse_migrate_db() {

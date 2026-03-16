@@ -13,33 +13,25 @@ This will build a container image for [Discourse](https://www.discourse.org/) - 
 
 ## Table of Contents
 
-* [About](#about)
-* [Maintainer](#maintainer)
-* [Table of Contents](#table-of-contents)
-* [Prerequisites and Assumptions](#prerequisites-and-assumptions)
-* [Installation](#installation)
-  * [Prebuilt Images](#prebuilt-images)
-  * [Multi-Architecture Support](#multi-architecture-support)
-  * [Quick Start](#quick-start)
-  * [Persistent Storage](#persistent-storage)
-* [Environment Variables](#environment-variables)
-  * [Base Images used](#base-images-used)
-  * [Core Configuration](#core-configuration)
-  * [Admin Options](#admin-options)
-  * [Log Options](#log-options)
-  * [Performance Options](#performance-options)
-  * [Database Options](#database-options)
-    * [Postgresql](#postgresql)
-    * [Redis](#redis)
-  * [SMTP Options](#smtp-options)
-  * [Plugins](#plugins)
-* [Users and Groups](#users-and-groups)
-  * [Networking](#networking)
-* [Maintenance](#maintenance)
-  * [Shell Access](#shell-access)
-* [Support & Maintenance](#support--maintenance)
-* [References](#references)
-* [License](#license)
+- [About](#about)
+- [Maintainer](#maintainer)
+- [Prerequisites and Assumptions](#prerequisites-and-assumptions)
+- [Installation](#installation)
+  - [Prebuilt Images](#prebuilt-images)
+  - [Multi-Architecture Support](#multi-architecture-support)
+  - [Quick Start](#quick-start)
+  - [Persistent Storage](#persistent-storage)
+- [Environment Variables](#environment-variables)
+  - [Base Images used](#base-images-used)
+  - [Core Configuration](#core-configuration)
+  - [Database Options](#database-options)
+  - [Plugins](#plugins)
+- [Users and Groups](#users-and-groups)
+- [Maintenance](#maintenance)
+  - [Shell Access](#shell-access)
+- [Support & Maintenance](#support--maintenance)
+- [References](#references)
+- [License](#license)
 
 ## Prerequisites and Assumptions
 
@@ -141,97 +133,218 @@ Below is the complete list of available options that can be used to customize yo
 
 >> Only used on first boot
 
-| Parameter     | Description                                 | Default               |
-| ------------- | ------------------------------------------- | --------------------- |
-| `ADMIN_USER`  | Username for admin                          | `admin`               |
-| `ADMIN_EMAIL` | Admin email address                         | `admin@example.com`   |
-| `ADMIN_PASS`  | Admin password - Must be over 10 characters | `nfrastack-discourse` |
-| `ADMIN_NAME`  | Admin Name (First and Last)                 | `Admin User`          |
+| Parameter     | Description                                 | Default               | Advanced |
+| ------------- | ------------------------------------------- | --------------------- | -------- |
+| `ADMIN_USER`  | Username for admin                          | `admin`               |          |
+| `ADMIN_EMAIL` | Admin email address                         | `admin@example.com`   |          |
+| `ADMIN_PASS`  | Admin password - Must be over 10 characters | `nfrastack-discourse` |          |
+| `ADMIN_NAME`  | Admin Name (First and Last)                 | `Admin User`          |          |
 
 #### Log Options
 
-| Parameter                | Description            | Default             |
-| ------------------------ | ---------------------- | ------------------- |
-| `LOG_FILE`               | Discourse Log File     | `discourse.log`     |
-| `LOG_LEVEL`              | Discourse Log Level    | `info`              |
-| `LOG_PATH`               | Path to store logfiles | `/logs/`            |
-| `UNICORN_LOG_FILE`       | Unicorn Log            | `unicorn.log`       |
-| `UNICORN_LOG_ERROR_FILE` | Unicorn Error Log      | `unicorn_error.log` |
-| `SIDEKIQ_LOG_FILE`       | SideKiq Log            | `sidekiq.log`       |
+| Parameter                | Description            | Default             | Advanced |
+| ------------------------ | ---------------------- | ------------------- | -------- |
+| `LOG_FILE`               | Discourse Log File     | `discourse.log`     |          |
+| `LOG_LEVEL`              | Discourse Log Level    | `info`              |          |
+| `LOG_PATH`               | Path to store logfiles | `/logs/`            |          |
+| `PLUGIN_LOG_FILE`        | Plugin operations file | `plugin.log         |          |
+| `UNICORN_LOG_FILE`       | Unicorn Log            | `unicorn.log`       |          |
+| `UNICORN_LOG_ERROR_FILE` | Unicorn Error Log      | `unicorn_error.log` |          |
+| `SIDEKIQ_LOG_FILE`       | SideKiq Log            | `sidekiq.log`       |          |
 
 #### Performance Options
 
-| Parameter         | Description         | Default |
-| ----------------- | ------------------- | ------- |
-| `UNICORN_WORKERS` | How many Workers    | `8`     |
-| `SIDEKIQ_THREADS` | Sidekiq Concurrency | `25`    |
+| Parameter         | Description         | Default | Advanced |
+| ----------------- | ------------------- | ------- | -------- |
+| `UNICORN_WORKERS` | How many Workers    | `8`     |          |
+| `SIDEKIQ_THREADS` | Sidekiq Concurrency | `25`    |          |
 
 #### Database Options
 
 ##### Postgresql
 
-| Parameter            | Description                                   | Default |
-| -------------------- | --------------------------------------------- | ------- |
-| `DB_POOL`            | How many Database connections                 | `8`     |
-| `DB_PORT`            | Database Port                                 | `5432`  |
-| `DB_TIMEOUT`         | Timeout for established connection in seconds | `5000`  |
-| `DB_TIMEOUT_CONNECT` | Connection Timeout in Seconds                 | `5`     |
-| `DB_USER`            | Username of Database                          |         |
-| `DB_NAME`            | Database name                                 |         |
-| `DB_PASS`            | Database Password                             |         |
-| `DB_HOST`            | Hostname of Database Server                   |         |
+| Parameter            | Description                                   | Default | Advanced |
+| -------------------- | --------------------------------------------- | ------- | -------- |
+| `DB_POOL`            | How many Database connections                 | `8`     |          |
+| `DB_PORT`            | Database Port                                 | `5432`  |          |
+| `DB_TIMEOUT`         | Timeout for established connection in seconds | `5000`  |          |
+| `DB_TIMEOUT_CONNECT` | Connection Timeout in Seconds                 | `5`     |          |
+| `DB_USER`            | Username of Database                          |         |          |
+| `DB_NAME`            | Database name                                 |         |          |
+| `DB_PASS`            | Database Password                             |         |          |
+| `DB_HOST`            | Hostname of Database Server                   |         |          |
 
 ##### Redis
 
-| Parameter                    | Description                                 | Default |
-| ---------------------------- | ------------------------------------------- | ------- |
-| `REDIS_DB`                   | Redis Database Number                       | `0`     |
-| `REDIS_ENABLE_TLS`           | Enable TLS when communication to REDIS_HOST | `FALSE` |
-| `REDIS_PORT`                 | Redis Host Listening Port                   | `6379`  |
-| `REDIS_SKIP_CLIENT_COMMANDS` | Skip client commands if unsupported         | `FALSE` |
+| Parameter                    | Description                                 | Default | Advanced |
+| ---------------------------- | ------------------------------------------- | ------- | -------- |
+| `REDIS_DB`                   | Redis Database Number                       | `0`     |          |
+| `REDIS_ENABLE_TLS`           | Enable TLS when communication to REDIS_HOST | `FALSE` |          |
+| `REDIS_PORT`                 | Redis Host Listening Port                   | `6379`  |          |
+| `REDIS_SKIP_CLIENT_COMMANDS` | Skip client commands if unsupported         | `FALSE` |          |
 
 #### SMTP Options
 
-| Parameter             | Description                              | Default         |
-| --------------------- | ---------------------------------------- | --------------- |
-| `SMTP_AUTHENTICATION` | SMTP Authentication type `plain` `login` | `plain`         |
-| `SMTP_DOMAIN`         | HELO Domain for remote SMTP Host         | `example.com`   |
-| `SMTP_HOST`           | SMTP Hostname                            | `postfix-relay` |
-| `SMTP_USER`           | SMTP Username                            |                 |
-| `SMTP_PASS`           | SMTP Username                            |                 |
-| `SMTP_PORT`           | SMTP Port                                | `25`            |
-| `SMTP_START_TLS`      | Enable STARTTLS on connection            | `TRUE`          |
-| `SMTP_TLS_FORCE`      | Force TLS on connection                  | `FALSE`         |
-| `SMTP_TLS_VERIFY`     | TLS Certificate verification             | `none`          |
+| Parameter             | Description                              | Default         | Advanced |
+| --------------------- | ---------------------------------------- | --------------- | -------- |
+| `SMTP_AUTHENTICATION` | SMTP Authentication type `plain` `login` | `plain`         |          |
+| `SMTP_DOMAIN`         | HELO Domain for remote SMTP Host         | `example.com`   |          |
+| `SMTP_HOST`           | SMTP Hostname                            | `postfix-relay` |          |
+| `SMTP_USER`           | SMTP Username                            |                 |          |
+| `SMTP_PASS`           | SMTP Username                            |                 |          |
+| `SMTP_PORT`           | SMTP Port                                | `25`            |          |
+| `SMTP_START_TLS`      | Enable STARTTLS on connection            | `TRUE`          |          |
+| `SMTP_TLS_FORCE`      | Force TLS on connection                  | `FALSE`         |          |
+| `SMTP_TLS_VERIFY`     | TLS Certificate verification             | `none`          |          |
 
 #### Plugins
 
-Presently not working
+This image includes a collection of Discourse plugins bundled under `/container/data/discourse/plugins` and supports user-provided plugins set by `PLUGIN_PATH`
 
-| Parameter                          | Description                   | Default                |
-| ---------------------------------- | ----------------------------- | ---------------------- |
-| `PLUGIN_PATH`                      | Path where plugins are stored | `{DATA_PATH}/plugins/` |
-| `PLUGIN_ENABLE_AUTOMATION`         |                               | `FALSE`                |
-| `PLUGIN_ENABLE_ASSIGN`             |                               | `FALSE`                |
-| `PLUGIN_ENABLE_CHAT_INTEGRATION`   |                               | `FALSE`                |
-| `PLUGIN_ENABLE_CHECKLIST`          |                               | `FALSE`                |
-| `PLUGIN_ENABLE_DETAILS`            |                               | `TRUE`                 |
-| `PLUGIN_ENABLE_EVENTS`             |                               | `FALSE`                |
-| `PLUGIN_ENABLE_FOOTNOTES`          |                               | `FALSE`                |
-| `PLUGIN_ENABLE_FORMATTING_TOOLBAR` |                               | `FALSE`                |
-| `PLUGIN_ENABLE_LAZY_VIDEOS`        |                               | `TRUE`                 |
-| `PLUGIN_ENABLE_LOCAL_DATES`        |                               | `TRUE`                 |
-| `PLUGIN_ENABLE_MERMAID`            |                               | `TRUE`                 |
-| `PLUGIN_ENABLE_NARRATIVE_BOT`      |                               | `TRUE`                 |
-| `PLUGIN_ENABLE_POLLS`              |                               | `TRUE`                 |
-| `PLUGIN_ENABLE_POST_VOTING`        |                               | `FALSE`                |
-| `PLUGIN_ENABLE_PRESENCE`           |                               | `TRUE`                 |
-| `PLUGIN_ENABLE_PUSH_NOTIFICATIONS` |                               | `FALSE`                |
-| `PLUGIN_ENABLE_SAME_ORIGIN`        |                               | `FALSE`                |
-| `PLUGIN_ENABLE_SOLVED`             |                               | `FALSE`                |
-| `PLUGIN_ENABLE_SPOILER_ALERT`      |                               | `FALSE`                |
-| `PLUGIN_ENABLE_STYLEGUIDE`         |                               | `TRUE`                 |
-| `PLUGIN_ENABLE_VOTING`             |                               | `FALSE`                |
+| Parameter              | Description                                                              | Default                    |
+| ---------------------- | ------------------------------------------------------------------------ | -------------------------- |
+| `PLUGIN_PATH`          | Path where plugins are stored                                            | `{DATA_PATH}/plugins/`     |
+| `PLUGIN_PRIORITY`      | Which source to prefer when a plugin exists in both `image` and `host`.  | `host`                     |
+| `PLUGIN_ENABLED_PATH`  | Where enabled plugins (symlinks) are created for Discourse to load them. | `/app/plugins`             |
+| `PLUGIN_ENABLE_<NAME>` | Enable Plugin via normalized name `TRUE` `FALSE`                         |                            |
+| `PLUGIN_TOOL_COMMAND`  | Command when configuring plugins on container startup                    | `plugin-tool sync` |
+
+>>`<NAME>` may be the short plugin name or include a `discourse_`/`discourse-` prefix.
+>> Examples:
+>> `PLUGIN_ENABLE_CAKEDAY=TRUE`, `PLUGIN_ENABLE_DISCOURSE_APPLE_AUTH=TRUE`, `PLUGIN_ENABLE_APPLE_AUTH=TRUE`.
+
+Normalization rules:
+- Environment names are normalized to a short plugin name by lowercasing and converting `_` to `-`, and stripping a leading `discourse-` or `discourse_` if present. For example `PLUGIN_ENABLE_APPLE_AUTH` -> `apple-auth`, which matches image folder `discourse-apple-auth`.
+
+
+Plugins Enabled from Image, override with `FALSE` value, Use `plugin-tool list all` to get full list.
+
+| Plugin Environment Variable   | Enabled |
+| ----------------------------- | ------- |
+| `PLUGIN_ENABLE_CHECKLIST`     |         `TRUE` |
+| `PLUGIN_ENABLE_DETAILS`       |         `TRUE` |
+| `PLUGIN_ENABLE_NARRATIVE_BOT` |         `TRUE` |
+| `PLUGIN_ENABLE_POLL`          |         `TRUE` |
+| `PLUGIN_ENABLE_PRESENCE`      |         `TRUE` |
+| `PLUGIN_ENABLE_REACTIONS`     |         `TRUE` |
+| `PLUGIN_ENABLE_STYLEGUIDE`    |         `TRUE` |
+
+>> Notes
+>> Host plugins (in `PLUGIN_PATH`) take precedence by default. Set `PLUGIN_PRIORITY=image` to prefer the packaged image plugins instead.
+>> Enabling a plugin creates a symlink in `PLUGIN_ENABLED_PATH` with the short name (e.g. `ai`) pointing to the chosen source directory. If a plugin folder exists in a host-mounted docker volume you can modify it and it will be used when `PLUGIN_PRIORITY=host`.
+
+##### Manually working with Plugins
+
+This image includes a helper script at `/usr/local/bin/plugin-tool` to manage plugins. Important commands:
+
+High-level commands: (also available via `plugin-tool help`):
+
+- `plugin-tool list all` — List all available plugins (image + `PLUGIN_PATH`).
+- `plugin-tool list enabled` — List plugins enabled via environment flags (`PLUGIN_ENABLE_* = TRUE`). Alias: `core`.
+- `plugin-tool list disabled` — List available plugins that are not enabled. Alias: `optional`.
+- `plugin-tool enable <name>` — Enable a plugin by friendly name. Normalizes names (case/underscores) and strips `discourse-` prefix. Examples: `ai`, `apple-auth`, `cakeday`.
+- `plugin-tool install <name>` — Copy the image plugin into `PLUGIN_PATH` so you can edit it in your persistent volume.
+- `plugin-tool remove <name>` / `plugin-tool uninstall <name>` — Remove enabled symlink or uninstall the copied plugin from `PLUGIN_PATH`.
+- `plugin-tool update <name>` — If host plugin is a git repo, attempt `git pull`; otherwise replace the host copy from the image (a backup is created).
+- `plugin-tool reset` — Remove all enabled plugin symlinks from `PLUGIN_ENABLED_PATH` (does not delete real directories).
+- `plugin-tool status` — Show enabled symlinks, their targets, and host/image version identifiers (git short SHA, `VERSION`/`.plugin-version`, or checksum).
+
+Environment flags and arguments are normalized before lookup. For example:
+
+- `PLUGIN_ENABLE_CAKEDAY=TRUE` -> `cakeday` -> matches `discourse-cakeday` in the image.
+- `PLUGIN_ENABLE_APPLE_AUTH=TRUE` -> `apple-auth` -> matches `discourse-apple-auth`.
+
+When enabling a plugin the resolver looks for variants in this order (by default):
+1. Host plugin directory in `PLUGIN_PATH` (e.g. `/data/plugins/apple-auth` or `/data/plugins/discourse-apple-auth`).
+2. Image plugin directory under `/container/data/discourse/plugins`.
+
+Set `PLUGIN_PRIORITY=image` to invert precedence and prefer the image copy when both exist.
+
+Behaviour notes
+
+- `enable` creates a symlink at `PLUGIN_ENABLED_PATH/<shortname>` that points to the chosen source directory.
+  For example `plugin-tool enable ai` -> `/app/plugins/ai -> /data/plugins/discourse-ai` or `/container/data/discourse/plugins/discourse-ai`.
+- The tool will refuse to enable if the target path already exists and is not a symlink to avoid accidental data loss.
+- `install` copies the image folder name (for example `discourse-ai`) into `PLUGIN_PATH`, if you need to modify things.
+- `status` prints a readable summary; it uses git short SHAs when `.git` exists, else `VERSION`/`.plugin-version`, otherwise a checksum.
+
+Examples
+
+Enable the `discourse-ai` plugin (prefers host copy if present):
+
+```bash
+PLUGIN_ENABLE_AI=TRUE
+
+/usr/local/bin/plugin-tool enable ai
+```
+
+Enable all plugins that have `PLUGIN_ENABLE_*` set to true (batch mode):
+
+```bash
+PLUGIN_ENABLE_CAKEDAY=TRUE
+PLUGIN_ENABLE_APPLE_AUTH=TRUE
+
+/usr/local/bin/plugin-tool enable env
+```
+
+Copy the image plugin into the persistent plugins directory so you can modify it, still needs to be enabled:
+
+```bash
+/usr/local/bin/plugin-tool install ai
+```
+
+Uninstall a host plugin and remove its enabled symlink:
+
+```bash
+/usr/local/bin/plugin-tool uninstall ai
+```
+
+Reset enabled plugins (remove symlinks):
+
+```bash
+usr/local/bin/plugin-tool reset
+```
+
+Show current enabled plugins and versions:
+
+```bash
+/usr/local/bin/plugin-tool status
+```
+
+Reconcile environment-driven enables/disables (sync examples):
+
+```bash
+# Preview changes without modifying filesystem (dry-run):
+PLUGIN_ENABLE_AI=TRUE
+PLUGIN_ENABLE_OLD=FALSE
+
+/usr/local/bin/plugin-tool sync --dry-run
+
+# Apply changes and prune any enabled symlink not explicitly set TRUE:
+/usr/local/bin/plugin-tool sync --prune
+```
+
+If you need more detail, run `plugin-tool help` inside the container to see the full command reference.
+
+Advanced install examples (git & archives)
+
+Install directly from a git repository (auto-derived name):
+
+```bash
+/usr/local/bin/plugin-tool install https://github.com/discourse/discourse-ai.git
+```
+
+Install from a git repo into an explicit name and branch:
+
+```bash
+/usr/local/bin/plugin-tool install mymod https://github.com/org/repo.git my-branch
+```
+
+Install from an archive URL (zip/tar.gz/zst):
+
+```bash
+/usr/local/bin/plugin-tool install https://example.com/plugins/discourse-foo.tar.gz
+```
 
 ## Users and Groups
 
@@ -255,6 +368,9 @@ Presently not working
 For debugging and maintenance, `bash` and `sh` are available in the container.
 
 Try using the command `rake --tasks`
+
+See above information regarding plugins.
+
 
 ## Support & Maintenance
 

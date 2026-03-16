@@ -3,100 +3,554 @@
 #
 # SPDX-License-Identifier: MIT
 
+source /container/base/functions/container/init
+_container_build_env_import silent $(basename $(dirname "$0"))
+_container_run_env_import silent $(basename $(dirname "$0"))
 source /container/defaults/20-discourse
 
-disable_plugin() {
+env_get_plugins_disabled() {
+    # Find PLUGIN_ENABLE_* env vars set to FALSE (or 0/no) and normalize them
+    set -o posix; set | sort | grep "^PLUGIN_ENABLE_.*=" | while IFS='=' read -r k v; do
+        if echo "${v}" | grep -Eiq "^(false|0|no)$" ; then
+            local name_part="${k#PLUGIN_ENABLE_}"
+            local norm
+            norm=$(normalize_plugin_name "${name_part}")
+            echo "${norm}"
+        fi
+    done
+}
+
+env_get_plugins_enabled() {
+    # Find PLUGIN_ENABLE_* env vars set to TRUE and normalize them to short plugin names
+    set -o posix; set | sort | grep "^PLUGIN_ENABLE_.*=" | while IFS='=' read -r k v; do
+        if echo "${v}" | grep -iq "^true$" ; then
+            # k looks like PLUGIN_ENABLE_FOO_BAR or PLUGIN_ENABLE_DISCOURSE_FOO
+            local name_part="${k#PLUGIN_ENABLE_}"
+            local norm
+            norm=$(normalize_plugin_name "${name_part}")
+            echo "${norm}"
+        fi
+    done
+}
+
+plugin_get_id() {
+     local ppath="${1}"
+     if [ -d "${ppath}/.git" ]; then
+        sudo -u "${DISCOURSE_USER}" git -C "${ppath}" rev-parse --short HEAD 2>/dev/null
+        return
+     fi
+     if [ -f "${ppath}/.plugin-version" ]; then
+         head -n1 "${ppath}/.plugin-version" | tr -d ' \t\n'
+         return
+     fi
+     if [ -f "${ppath}/VERSION" ]; then
+         head -n1 "${ppath}/VERSION" | tr -d ' \t\n'
+         return
+     fi
+     # checksum fallback
+     find "${ppath}" -type f -print0 2>/dev/null | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | awk '{print $1}' || echo "noversion"
+ }
+
+log_action() {
+    # log_action <ACTION> <plugin_shortname> [extra]
+    local action="$1"
+    local plugin="${2}"
+    local extra="$3"
+    local ts
+    ts=$(TZ=${TIMEZONE} date +%Y-%m-%d.%H:%M:%S)
+    local short
+    short=$(normalize_plugin_name "${plugin}")
+    IFS='|' read -r host_path image_path <<< "$(resolve_plugin_paths "${short}")"
+    local host_id='-'
+    local image_id='-'
+    if [ -n "${host_path}" ]; then host_id=$(plugin_get_id "${host_path}"); fi
+    if [ -n "${image_path}" ]; then image_id=$(plugin_get_id "${image_path}"); fi
+    local logfile="${LOG_PATH%/}/${LOG_PLUGIN_FILE}"
+    create_folder "${LOG_PATH}" "${DISCOURSE_USER}"
+    local line
+    line="${ts} ${action} ${short} host=${host_path:-<none>} host_id=${host_id} image=${image_path:-<none>} image_id=${image_id} ${extra:-}"
+    sudo -u "${DISCOURSE_USER}" bash -c "mkdir -p \"$(dirname "${logfile}")\"; printf '%s\n' \"${line}\" >> \"${logfile}\""
+}
+
+
+normalize_plugin_name() {
+    # convert input to a short canonical name: lowercase, underscores -> hyphens, strip leading discourse-/_
+    local n="$1"
+    n="${n,,}"
+    n="${n//_/-}"
+    n="${n#discourse-}"
+    n="${n#discourse_}"
+    echo "${n}"
+}
+
+resolve_plugin_paths() {
+    # <shortname>
+    local short="${1}"
+    local core_path="/container/data/discourse/plugins/"
+    local host_candidates=("${PLUGIN_PATH}/${short}" "${PLUGIN_PATH}/discourse-${short}" "${PLUGIN_PATH}/${short//-/_}" "${PLUGIN_PATH}/discourse_${short}")
+    local image_candidates=("${core_path}/${short}" "${core_path}/discourse-${short}" "${core_path}/${short//-/_}" "${core_path}/discourse_${short}")
+
+    local host=""
+    local image=""
+    for p in "${host_candidates[@]}"; do
+        if [ -d "${p}" ]; then
+            host="${p}"
+            break
+        fi
+    done
+    for p in "${image_candidates[@]}"; do
+        if [ -d "${p}" ]; then
+            image="${p}"
+            break
+        fi
+    done
+    printf "%s|%s" "${host}" "${image}"
+}
+
+plugin_disable() {
     if [ -n "${1}" ]; then
         case "${1}" in
-        #    "all" )
-        #        echo "**Disabling All Plugins"
-        #        for module in "${plugins_available}"/* ; do
-        #            :
-        #        done
-        #    ;;
-        #    "core" )
-        #        echo "** Disabling Core Plugins"
-        #    ;;
-        #    "optional" )
-        #        echo "** Disabling Optional Plugins"
-        #    ;;
-            reset )
-                rm -rf "${PLUGIN_PATH%/}"/enabled/*
+            all )
+                if [ -d "${PLUGIN_ENABLED_PATH}" ]; then
+                    for link in "${PLUGIN_ENABLED_PATH}"/*; do
+                        if [ -L "${link}" ]; then
+                            name=$(basename "${link}")
+                            target=$(readlink -f "${link}")
+                            rm -f "${link}"
+                            print_notice "[plugin-tool] Disabled plugin: ${name}"
+                            log_action "[disable] [all]" "${name}" "target=${target}"
+                        fi
+                    done
+                    return 0
+                else
+                    return 1
+                fi
+            ;;
+            enabled|core|env )
+                local p
+                for p in $(env_get_plugins_enabled); do
+                    short=$(normalize_plugin_name "${p}")
+                    link="${PLUGIN_ENABLED_PATH%/}/${short}"
+                    if [ -L "${link}" ]; then
+                        target=$(readlink -f "${link}")
+                        rm -f "${link}"
+                        print_notice "[plugin-tool] Disabled plugin: ${short}"
+                        log_action "[disable] [enabled]" "${short}" "target=${target}"
+                    fi
+                done
+                return 0
             ;;
             * )
                 local plugin_name="$1"
-                local enabled_path="${PLUGIN_PATH%/}/enabled"
+                local enabled_path="${PLUGIN_ENABLED_PATH%/}"
                 local plugin_link="${enabled_path}/${plugin_name}"
-                # If symlink exists in enabled_path, remove it
                 if [ -L "${plugin_link}" ]; then
+                    target=$(readlink -f "${plugin_link}")
                     rm -f "${plugin_link}"
-                    echo "Disabled plugin: ${plugin_name} (symlink removed from enabled)"
+                    print_notice "[plugin-tool] Disabled plugin: ${plugin_name}"
+                    log_action "[disable]" "${plugin_name}" "target=${target}"
                     return 0
-                else
-                    echo "** Requested disabling '${plugin_name}' plugin however it doesn't exist as a symlink"
                 fi
             ;;
         esac
     else
-       echo "** Disable Plugin"
-       #echo "Commands: all | core | optional | (pluginname)"
-       echo "Commands: reset | (pluginname)"
+        cat <<EOF
+[plugin-tool] Disable Plugin
+              Commands: all | enabled | (pluginname)
+EOF
     fi
 }
 
-enable_plugin () {
+plugin_enable() {
     if [ -n "${1}" ]; then
         case "${1}" in
-                #"all" )
-                #    echo "** Enabling All Plugins"
-                #;;
-                #"core" )
-                #    echo "** Activating Core Plugins"
-                #;;
-                #"optional" )
-                #    echo "** Activating Optional Plugins"
-                #;;
                 * )
-                    local plugin_name="$1"
-                    local core_path="/container/data/discourse/plugins"
-                    local enabled_path="${PLUGIN_PATH}/enabled"
-                    local plugin_target="${core_path}/${plugin_name}"
-                    local plugin_link="${enabled_path}/${plugin_name}"
-
-                    sudo -u "${DISCOURSE_USER}" mkdir -p "${enabled_path}"
-
-                    # If symlink already exists in enabled_path, do nothing
-                    if [ -L "${plugin_link}" ]; then
-                        echo "Plugin '${plugin_name}' already enabled (symlink exists in enabled)."
+                    local req="${1}"
+                    if [ "${req,,}" = "enabled" ] || [ "${req,,}" = "env" ]; then
+                        # enable all plugins from env
+                        local p
+                        for p in $(env_get_plugins_enabled); do
+                            plugin_enable "${p}"
+                        done
                         return 0
                     fi
 
-                    # If plugin exists in core_path and is a directory, symlink it
-                    if [ -d "${plugin_target}" ]; then
-                        sudo -u "${DISCOURSE_USER}" ln -sf "${plugin_target}" "${plugin_link}"
-                        echo "Enabled plugin: ${plugin_name} (symlinked to enabled)"
-                        return 0
-                    fi
+                    local short
+                    short=$(normalize_plugin_name "${req}")
+                    IFS='|' read -r host_path image_path <<< "$(resolve_plugin_paths "${short}")"
+                    local src_path=""
 
-                    # If plugin exists in PLUGIN_PATH and is a directory, symlink it to enabled_path if not already linked
-                    if [ -d "${PLUGIN_PATH}/${plugin_name}" ]; then
-                        if [ -L "${plugin_link}" ]; then
-                            echo "Plugin '${plugin_name}' already enabled (symlink exists in enabled)."
-                            return 0
+                    if [ "${PLUGIN_PRIORITY,,}" = "image" ]; then
+                        if [ -n "${image_path}" ]; then
+                            src_path="${image_path}"
                         fi
-                        ln -sf "${PLUGIN_PATH}/${plugin_name}" "${plugin_link}"
-                        echo "Enabled plugin: ${plugin_name} (symlinked from PLUGIN_PATH to enabled)"
+                        if [ -n "${host_path}" ]; then
+                            if [ -n "${src_path}" ]; then
+                                local host_id=$(plugin_get_id "${host_path}")
+                                local image_id=$(plugin_get_id "${image_path}")
+                                if [ "${host_id}" != "${image_id}" ]; then
+                                    print_warn "Both host and image have plugin '${short}'. Image copy will be used"
+                                    echo "  image id: ${image_id}"
+                                    echo "  host  id: ${host_id}"
+                                fi
+                            else
+                                src_path="${host_path}"
+                            fi
+                        fi
+                    else
+                        if [ -n "${host_path}" ]; then
+                            src_path="${host_path}"
+                        fi
+                        if [ -n "${image_path}" ]; then
+                            if [ -n "${src_path}" ]; then
+                                local host_id=$(plugin_get_id "${host_path}")
+                                local image_id=$(plugin_get_id "${image_path}")
+                                if [ "${host_id}" != "${image_id}" ]; then
+                                    print_warn "Host plugin '${short}' (id ${host_id}) overrides image plugin (id ${image_id})."
+                                fi
+                            else
+                                src_path="${image_path}"
+                            fi
+                        fi
+                    fi
+
+                    sudo -u "${DISCOURSE_USER}" mkdir -p "${PLUGIN_ENABLED_PATH}"
+                    local plugin_link="${PLUGIN_ENABLED_PATH%/}/${short}"
+
+                    if [ -e "${plugin_link}" ] && [ ! -L "${plugin_link}" ]; then
+                        print_error "Refusing to enable '${short}'. Path exists and is not a symlink: ${plugin_link}"
+                        return 1
+                    fi
+
+                    if [ -n "${src_path}" ]; then
+                        sudo -u "${DISCOURSE_USER}" ln -sf "${src_path}" "${plugin_link}"
+                        print_info "[plugin-tool] Enabled plugin: ${short}"
+                        print_debug "[plugin-tool] Source path: ${src_path}"
+                        log_action "[enable]" "${short}" "src=${src_path}"
                         return 0
                     fi
-                    echo "** Requested enabling '${plugin_name}' plugin however it doesn't exist in core or PLUGIN_PATH!"
+
+                    print_error "** Requested enabling '${short}' plugin however it doesn't exist in image or 'PLUGIN_PATH'"
                     return 1
                 ;;
         esac
     else
-       echo "** Enable Plugin"
-       #echo "Commands: all | core | optional | (plugin_name)"
-       echo "Commands: (plugin_name)"
+        cat <<EOF
+[plugin-tool] Enable Plugin
+              Commands: Commands: all | enabled | (pluginname)
+EOF
     fi
+}
+
+plugin_install() {
+    # Usage:
+    #  install <shortname>                  (copy from image)
+    #  install <git-url> [branch]           (clone repo into '${PLUGIN_PATH}')
+    #  install <name> <git-url> [branch]    (clone into '${PLUGIN_PATH}'/<name>)
+    #  install <archive-url>                (download and extract into '$PLUGIN_PATH')
+
+    if [ -z "${1}" ]; then
+        cat <<EOF
+[plugin-tool] Install Plugin
+              Usage:
+                     install <plugin_shortname>
+                     install <git-url> [branch]
+                     install <name> <git-url> [branch]
+                     install <archive-url> (zip, tar.gz, tar.zst, tgz, zst)
+EOF
+        return 1
+    fi
+
+    local a1="$1"
+    local a2="${2}"
+    local a3="$3"
+    local src=""
+    local name=""
+
+    if echo "${a1}" | grep -Eq '^(https?://|git@|ssh://)'; then
+        src="${a1}"
+        name=""
+        branch="${a2}"
+    elif [ -n "${a2}" ] && echo "${a2}" | grep -Eq '^(https?://|git@|ssh://)'; then
+        name="${a1}"
+        src="${a2}"
+        branch="${a3}"
+    else
+        local short
+        short=$(normalize_plugin_name "${a1}")
+        IFS='|' read -r host_path image_path <<< "$(resolve_plugin_paths "${short}")"
+        if [ -n "${host_path}" ]; then
+            print_notice "Plugin already present in ${PLUGIN_PATH}: ${host_path}"
+            return 0
+        fi
+        if [ -z "${image_path}" ]; then
+            print_error "Cannot install '${short}': plugin not found in image (/container/data/discourse/plugins)"
+            return 1
+        fi
+        create_folder "${PLUGIN_PATH}" "${DISCOURSE_USER}:${DISCOURSE_GROUP}" 755
+        local base
+        base=$(basename "${image_path}")
+        local dest="${PLUGIN_PATH}/${base}"
+        if [ -d "${dest}" ]; then
+            print_info "Plugin already installed at ${dest}"
+            return 0
+        fi
+        print_info "Installing ${base} -> ${dest}"
+        sudo -u "${DISCOURSE_USER}" cp -a "${image_path}" "${dest}"
+        log_action "[install]" "${base}" "dest=${dest}"
+        return $?
+    fi
+
+    create_folder "${PLUGIN_PATH}" "${DISCOURSE_USER}:${DISCOURSE_GROUP}" 755
+
+    if [ -z "${name}" ]; then
+        base=$(basename "${src}")
+        base=${base%.git}
+        base=${base%.tar.gz}
+        base=${base%.tgz}
+        base=${base%.zip}
+        base=${base%.tar.zst}
+        base=${base%.zst}
+        name="${base}"
+    fi
+
+    dest="${PLUGIN_PATH%/}/${name}"
+    if [ -d "${dest}" ]; then
+        print_error "Destination ${dest} already exists; aborting. Remove it first or choose another name."
+        return 1
+    fi
+
+    # Handle archives vs git
+    if echo "${src}" | grep -Ei '\\.(zip|tar\\.gz|tgz|tar\\.zst|zst)$' >/dev/null; then
+        tmpdir=$(mktemp -d)
+        tmpfile="${tmpdir}/archive"
+        echo "Downloading archive ${src}..."
+        curl -sSL --fail -s -o "${tmpfile}" "${src}" || { echo "Download failed"; rm -rf "${tmpdir}"; return 1; }
+        echo "Extracting..."
+        mkdir -p "${tmpdir}/out"
+        case "${tmpfile}" in
+            *.zip)
+                unzip -q "${tmpfile}" -d "${tmpdir}/out" || { echo "unzip failed"; rm -rf "${tmpdir}"; return 1; }
+            ;;
+            *)
+                if tar -tf "${tmpfile}" >/dev/null 2>&1; then
+                    tar xf "${tmpfile}" -C "${tmpdir}/out" || { echo "tar extract failed"; rm -rf "${tmpdir}"; return 1; }
+                else
+                    tar --use-compress-program=unzstd -xf "${tmpfile}" -C "${tmpdir}/out" || { echo "tar+zstd extract failed"; rm -rf "${tmpdir}"; return 1; }
+                fi
+            ;;
+        esac
+        children=("${tmpdir}/out"/*)
+        if [ "${#children[@]}" -eq 1 ] && [ -d "${children[0]}" ]; then
+            mv "${children[0]}" "${dest}"
+        else
+            mv "${tmpdir}/out" "${dest}"
+        fi
+        silent sudo -u "${DISCOURSE_USER}" chown -R "${DISCOURSE_USER}:" "${dest}"
+        rm -rf "${tmpdir}"
+        echo "Installed archive to ${dest}"
+        log_action "[install] [archive]" "${name}" "dest=${dest} src=${src}"
+        return 0
+    else
+        echo "Cloning ${src} -> ${dest}"
+        sudo -u "${DISCOURSE_USER}" git clone --depth 1 ${branch:+-b "${branch}"} "${src}" "${dest}" || { echo "git clone failed"; rm -rf "${dest}"; return 1; }
+        echo "Cloned to ${dest}"
+        log_action "[install] [git]" "${name}" "dest=${dest} src=${src} branch=${branch:-}"
+        return 0
+    fi
+}
+
+plugin_list() {
+    # Build a list of all available plugins (image + ${PLUGIN_PATH})
+    tmpfile=$(mktemp)
+    for plugin in /container/data/discourse/plugins/*; do
+        if [ -d "${plugin}" ]; then
+            b=$(basename "${plugin}")
+            b="${b#discourse-}"
+            b="${b#discourse_}"
+            echo "${b}" >> "${tmpfile}"
+        fi
+    done
+    for plugin in ${PLUGIN_PATH%/}/*; do
+        if [ -d "${plugin}" ]; then
+            b=$(basename "${plugin}")
+            b="${b#discourse-}"
+            b="${b#discourse_}"
+            echo "${b}" >> "${tmpfile}"
+        fi
+    done
+    mapfile -t ALL_PLUGINS < <(sort -u "${tmpfile}" 2>/dev/null || true)
+    rm -f "${tmpfile}" || true
+
+    if [ -z "${1}" ]; then
+        cat <<EOF
+[plugin-tool] List Plugins
+              Commands: all | enabled | disabled
+EOF
+        return 0
+    fi
+
+    case "${1,,}" in
+        "all" )
+            print_notice "Listing All Plugins (image + ${PLUGIN_PATH})"
+            for p in "${ALL_PLUGINS[@]}"; do
+                echo "${p}"
+            done
+        ;;
+        "enabled" | "env" )
+            print_notice "Listing Enabled Plugins (PLUGIN_ENABLE_*=TRUE)"
+            for p in $(env_get_plugins_enabled); do
+                short=$(normalize_plugin_name "${p}")
+                IFS='|' read -r host_path image_path <<< "$(resolve_plugin_paths "${short}")"
+                if [ -n "${host_path}" ] || [ -n "${image_path}" ]; then
+                    echo "${short}"
+                fi
+            done
+        ;;
+        "disabled" )
+            print_notice "Listing Disabled Plugins"
+            declare -A enabled_map
+            for p in $(env_get_plugins_enabled); do
+                enabled_map[$(normalize_plugin_name "${p}")]=1
+            done
+            for p in "${ALL_PLUGINS[@]}"; do
+                if [ -z "${enabled_map[${p}]}" ]; then
+                    echo "${p}"
+                fi
+            done
+        ;;
+    esac
+    return 0
+}
+
+plugin_remove() {
+    if [ -z "$1" ]; then
+        echo "Usage: remove <plugin_shortname>"
+        return 1
+    fi
+    local short
+    short=$(normalize_plugin_name "$1")
+    local link="${PLUGIN_ENABLED_PATH%/}/${short}"
+    if [ -L "${link}" ]; then
+        target=$(readlink -f "${link}")
+        rm -f "${link}"
+        echo "Removed enabled plugin symlink: ${link}"
+        log_action "REMOVE_SYMLINK" "${short}" "target=${target}"
+        return 0
+    fi
+    if [ -e "${link}" ]; then
+        echo "Refusing to remove ${link}: exists and is not a symlink"
+        return 1
+    fi
+    print_error "No enabled plugin named '${short}'"
+    return 1
+}
+
+plugin_update() {
+    if [ -z "${1}" ]; then
+        cat <<EOF
+[plugin-tool] Update Plugin
+              Usage:
+                     update <plugin_shortname>
+EOF
+        return 1
+    fi
+    local short
+    short=$(normalize_plugin_name "$1")
+    IFS='|' read -r host_path image_path <<< "$(resolve_plugin_paths "${short}")"
+
+    if [ -n "${host_path}" ]; then
+        if [ -d "${host_path}/.git" ]; then
+            echo "Updating git plugin at ${host_path}"
+            sudo -u "${DISCOURSE_USER}" git -C "${host_path}" fetch --all --prune || echo "git fetch failed"
+            sudo -u "${DISCOURSE_USER}" git -C "${host_path}" pull --ff-only || echo "git pull failed or non-fast-forward"
+            log_action "UPDATE" "${short}" "method=git host=${host_path}"
+            return 0
+        fi
+
+        if [ -n "${image_path}" ]; then
+            backup="${host_path}.bak.$(date +%s)"
+            echo "Backing up ${host_path} -> ${backup}"
+            sudo -u "${DISCOURSE_USER}" cp -a "${host_path}" "${backup}"
+            echo "Replacing host plugin with image version"
+            rm -rf "${host_path}"
+            sudo -u "${DISCOURSE_USER}" cp -a "${image_path}" "${host_path}"
+            echo "Updated ${short} (backup at ${backup})"
+            log_action "[update]" "${short}" "method=image-replace host=${host_path} backup=${backup}"
+            return 0
+        fi
+
+        print_error "No image source to update from for ${short}; host exists but not git"
+        return 1
+    else
+        # Host path doesn't exist; try to install from image
+        if [ -n "${image_path}" ]; then
+            sudo -u "${DISCOURSE_USER}" mkdir -p "${PLUGIN_PATH}"
+            base=$(basename "${image_path}")
+            dest="${PLUGIN_PATH}/${base}"
+            echo "Installing ${base} -> ${dest}"
+            sudo -u "${DISCOURSE_USER}" cp -a "${image_path}" "${dest}"
+            log_action "INSTALL" "${base}" "dest=${dest}"
+            return 0
+        fi
+        print_error "Plugin ${short} not found in image or host"
+        return 1
+    fi
+}
+
+plugin_uninstall() {
+    if [ -z "${1}" ]; then
+        cat <<EOF
+[plugin-tool] Uninstall Plugin
+              Usage:
+                     uninstall <plugin_shortname>
+EOF
+        return 1
+    fi
+    local short
+    short=$(normalize_plugin_name "$1")
+    IFS='|' read -r host_path image_path <<< "$(resolve_plugin_paths "${short}")"
+    if [ -z "${host_path}" ]; then
+        echo "Plugin ${short} not installed in ${PLUGIN_PATH}"
+        return 1
+    fi
+    echo "Removing host plugin at ${host_path}"
+    rm -rf "${host_path}"
+    log_action "[uninstall]" "${short}" "host=${host_path}"
+    # remove enabled symlink if present
+    link="${PLUGIN_ENABLED_PATH%/}/${short}"
+    if [ -L "${link}" ]; then
+        target=$(readlink -f "${link}")
+        rm -f "${link}"
+        echo "Also removed enabled symlink ${link}"
+        log_action "[uninstall] [remove_symlink]" "${short}" "target=${target}"
+    fi
+    echo "Uninstalled ${short}"
+    return 0
+}
+
+status() {
+    print_info "Plugin status (${PLUGIN_ENABLED_PATH} / ${PLUGIN_PATH} / image)"
+    if [ -d "${PLUGIN_ENABLED_PATH}" ]; then
+        for entry in "${PLUGIN_ENABLED_PATH}"/*; do
+            if [ -L "${entry}" ]; then
+                name=$(basename "${entry}")
+                target=$(readlink -f "${entry}")
+                short=$(normalize_plugin_name "${name}")
+                IFS='|' read -r host_path image_path <<< "$(resolve_plugin_paths "${short}")"
+                host_id="-"
+                image_id="-"
+                if [ -n "${host_path}" ]; then host_id=$(plugin_get_id "${host_path}"); fi
+                if [ -n "${image_path}" ]; then image_id=$(plugin_get_id "${image_path}"); fi
+                echo "${name} -> ${target}"
+                echo "  host: ${host_path:-<none>} (${host_id})"
+                echo "  image:${image_path:-<none>} (${image_id})"
+            fi
+        done
+    else
+        echo "No enabled plugins at ${PLUGIN_ENABLED_PATH}"
+    fi
+    return 0
 }
 
 info() {
@@ -146,102 +600,197 @@ EOF
             ;;
         esac
     else
-        echo "** Info"
-        echo "Commands: help | image | path | version"
+        cat <<EOF
+[plugin-tool] Info
+              Commands:
+                     help
+                     image
+                     path
+                     version
+EOF
     fi
 }
 
-list_plugin() {
-    if [ -n "${1}" ]; then
-        case "${1,,}" in
-            #"all" )
-            #    echo "** Listing All Plugins"
-            #;;
-            "core"  )
-                echo "** Listing Core Plugins"
-                for plugin in /container/data/discourse/plugins/*; do
-                    if [ -d "${plugin}" ]; then
-                        echo "$(basename "$plugin")"
-                    fi
-                done
-                ## at some point we want to parse this list and check variables to see if they are enabled or not
-            ;;
-            #"optional" )
-            #    echo "** Listing Optional Plugins"
-            #;;
-        esac
-    else
-       echo "** List Plugins"
-       #echo "Commands: all | core | optional"
-       echo "Commands: core"
-    fi
-}
+
 
 display_help() {
     cat <<EOF
 
-    Discourse Companion Tool
+    Discourse Plugin Tool
+    © 2026 Nfrastack <code@nfrastack.com> https://www.nfrastack.com
+
     Syntax: $(basename $0) <command> <argument>
 
-    Command: enable | disable | list | help
+     Command: enable | disable | list | help
        install - Install a plugin to system
        remove - Remove a plugin from system
        update - Update a plugin
+       uninstall - Remove a plugin from '\${PLUGIN_PATH}'
        enable - Enable a module for usage
-       disable - Disable a mdule for usage
+       disable - Disable a module for usage
+       reset - Remove all enabled plugin symlinks
+       sync  - Reconcile '\${PLUGIN_ENABLE_*}' environment (TRUE/FALSE).
+         Options: --prune --dry-run
+       status - Show enabled plugins and versions
        info - Get information about the Discourse install
        list - List available plugins
+         Subcommands: all | enabled | disabled
        help - This is it
 
-    Argument: all | core | optional | <module_name>
-       all - Every Plugin
-       core - Plugins set via environment variable PLUGIN_ENABLE_*=TRUE
-       optional - All other modules not explicitly set with PLUGIN_ENABLE_*=TRUE
+     Argument: all | enabled | disabled | <module_name>
+         all - Every Plugin
+         enabled/env - Plugins set via environment variable '\${PLUGIN_ENABLE_*=TRUE}'
+         disabled/optional - All other modules not explicitly set with '\${PLUGIN_ENABLE_*=TRUE}'
        plugin_name - The discourse plugin name
 EOF
 }
 
-get_env_plugins_enabled() {
-    set -o posix; set | sort | grep "^PLUGIN_ENABLE_.*=" | grep -i TRUE | cut -d _ -f 4- | cut -d = -f 1 | tr A-Z a-z
-}
 
-silent() {
-    if [ "${DEBUG_MODE,,}" = "true" ] || [ "${SHOW_OUTPUT,,}" = "true" ] || [ "${CONTAINER_LOG_LEVEL,,}" = "debug" ] ;  then
-        "$@"
-    else
-        "$@" > /dev/null 2>&1
+sync_plugins() {
+    # sync_plugins [--prune] [--dry-run]
+
+    local prune=false
+    local dryrun=false
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --prune) prune=true; shift ;;
+            --dry-run|-n) dryrun=true; shift ;;
+            *) print_error "Unknown sync option: ${1}"; return 1 ;;
+        esac
+    done
+
+    print_debug "[plugin_tool] [sync] Syncing plugins with environment (respecting PLUGIN_ENABLE_*=TRUE/FALSE)"
+    if [ "${dryrun}" = "true" ]; then
+        echo "****** DRY RUN MODE ****** NO CHANGES WILL BE WRITTEN"
+    fi
+
+    declare -A enabled_map
+    local p short
+    for p in $(env_get_plugins_enabled); do
+        enabled_map[$(normalize_plugin_name "${p}")]=1
+    done
+
+    local link target
+    for p in $(env_get_plugins_disabled); do
+        short=$(normalize_plugin_name "${p}")
+        link="${PLUGIN_ENABLED_PATH%/}/${short}"
+        if [ -L "${link}" ]; then
+            target=$(readlink -f "${link}")
+            if [ "${dryrun}" = "true" ]; then
+                :
+            else
+                rm -f "${link}"
+                echo "Disabled by env: ${short} (symlink removed)"
+                log_action "[sync] [disable] [env]" "${short}" "target=${target}"
+            fi
+            echo "Disabled by env: ${short}"
+        else
+            if [ -e "${link}" ]; then
+                echo "Refusing to remove ${link}: exists and is not a symlink"
+            else
+                echo "No enabled symlink for ${short}; nothing to do"
+            fi
+        fi
+    done
+
+    for p in $(env_get_plugins_enabled); do
+        short=$(normalize_plugin_name "${p}")
+        link="${PLUGIN_ENABLED_PATH%/}/${short}"
+        if [ -e "${link}" ] && [ ! -L "${link}" ]; then
+            echo "Skipping enable ${short}: ${link} exists and is not a symlink"
+            continue
+        fi
+        if [ "${dryrun}" = "true" ]; then
+            if [ -L "${link}" ]; then
+                echo "[sync] [enable] [dry-run] ${short} (already symlinked)"
+            else
+                echo "[sync] [enable] [dry-run] ${short} (would be enabled)"
+            fi
+        else
+            plugin_enable "${short}" || echo "enable failed: ${short}"
+        fi
+    done
+
+    # If prune requested, remove any symlink not explicitly enabled
+    if [ "${prune}" = "true" ]; then
+        print_notice "[plugin-tool] [prune] Pruning enabled symlinks not explicitly set TRUE"
+        if [ -d "${PLUGIN_ENABLED_PATH}" ]; then
+            for entry in "${PLUGIN_ENABLED_PATH}"/*; do
+                if [ -L "${entry}" ]; then
+                    name=$(basename "${entry}")
+                    short=$(normalize_plugin_name "${name}")
+                    if [ -z "${enabled_map[${short}]}" ]; then
+                        target=$(readlink -f "${entry}")
+                        if [ "${dryrun,,}" = "true" ]; then
+                            echo "[sync] [prune] [dry-run] Would prune symlink ${name} -> ${target} (not explicitly enabled)"
+                        else
+                            rm -f "${entry}"
+                            echo "Pruned enabled symlink: ${name} -> ${target}"
+                            log_action "[sync] [prune]" "${short}" "target=${target}"
+                        fi
+                    fi
+                fi
+            done
+        fi
     fi
 }
 
-if [ -n "$1" ] ; then
+reset_enabled_plugins() {
+    if [ -d "${PLUGIN_ENABLED_PATH}" ]; then
+        for link in "${PLUGIN_ENABLED_PATH}"/*; do
+            if [ -L "${link}" ]; then
+                name=$(basename "${link}")
+                target=$(readlink -f "${link}")
+                rm -f "${link}"
+                log_action "[reset]" "${name}" "target=${target}"
+            fi
+        done
+        print_notice "[plugin-tool] [reset] Removed all plugin symlinks from ${PLUGIN_ENABLED_PATH}"
+    fi
+}
+
+if [ -n "${1}" ] ; then
     case "${1,,}" in
         "install" )
-            install_plugin "$2"
+            plugin_install "${2}"
         ;;
         "remove" )
-            remove_plugin "$2"
+            plugin_remove "${2}"
         ;;
         "update" )
-            update_plugin "$2"
+            plugin_update "${2}"
+        ;;
+        "reset" )
+            reset_enabled_plugins
+        ;;
+        "status" )
+            status
+        ;;
+        "sync" )
+            sync_plugins "${@:2}"
         ;;
         "enable" )
-            enable_plugin "$2"
+            plugin_enable "${2}"
         ;;
         "disable" )
-            disable_plugin "$2"
+            plugin_disable "${2}"
         ;;
         "info" )
-            # Default to 'help' when no sub-argument is provided so `plugin-tool info` shows detailed help
             info "${2:-help}"
         ;;
         "list" )
-            list_plugin "$2"
+            plugin_list "${2}"
         ;;
         "help" )
-            display_help "$2"
+            display_help "${2}"
         ;;
     esac
 else
-    echo "Discourse Image Companion Tool"
-    echo "Commands: install | remove | update | enable | disable | list | info | help"
+    cat << EOF
+Discourse Image Plugin Tool
+© 2026 Nfrastack <code@nfrastack.com> https://www.nfrastack.com
+
+Commands: install | remove | update | enable | disable | sync | list | status | info | help
+EOF
+
 fi

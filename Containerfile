@@ -22,8 +22,6 @@ ARG \
     DISCOURSE_REPO_URL="https://github.com/discourse/discourse" \
     OXIPNG_VERSION="v9.1.5" \
     OXIPNG_REPO_URL="https://github.com/oxipng/oxipng" \
-    RUBY_VERSION="v3.4.8" \
-    RUBY_REPO_URL="https://github.com/ruby/ruby" \
     DISCOURSE_USER \
     DISCOURSE_GROUP
 
@@ -82,25 +80,8 @@ RUN echo "" && \
                                     pngquant \
                                     postgresql-client \
                                     postgresql-contrib \
+                                    unzip \
                               " && \
-    RUBY_BUILD_DEPS_DEBIAN=" \
-                                autoconf \
-                                automake \
-                                libffi-dev \
-                                libjemalloc-dev \
-                                libncurses5-dev \
-                                libreadline-dev \
-                                libyaml-dev \
-                                ruby \
-                                zlib1g-dev \
-                           " && \
-    RUBY_RUN_DEPS_DEBIAN=" \
-                            libffi8 \
-                            libicu76 \
-                            libjemalloc2 \
-                            libssl3 \
-                            zlib1g \
-                         " && \
     SHARED_BUILD_DEPS_DEBIAN="  \
                                 bison \
                                 build-essential \
@@ -122,29 +103,16 @@ RUN echo "" && \
     package install \
                     DISCOURSE_BUILD_DEPS \
                     DISCOURSE_RUN_DEPS \
-                    RUBY_BUILD_DEPS \
-                    RUBY_RUN_DEPS \
                     SHARED_BUILD_DEPS \
                     SHARED_RUN_DEPS \
                     && \
+    \
+    package build ruby 3.4 && \
     \
     mkdir -p /usr/src/oxipng && \
     curl -sSL "${OXIPNG_REPO_URL}"/releases/download/"${OXIPNG_VERSION}"/oxipng-"${OXIPNG_VERSION/v/}"-$(container_info arch)-unknown-linux-gnu.tar.gz | tar xvfz - --strip 1 -C /usr/src/oxipng && \
     mv /usr/src/oxipng/oxipng /usr/local/bin/oxipng && \
     container_build_log add "OxiPNG" "${OXIPNG_VERSION}" "pkg ${OXIPNG_REPO_URL}" && \
-    \
-    clone_git_repo "${RUBY_REPO_URL}" "${RUBY_VERSION//./_}" /usr/src/ruby && \
-    autoreconf -fiv && \
-    ./configure \
-                --disable-install-rdoc \
-                --enable-shared \
-                --with-jemalloc \
-                && \
-    make -j$(nproc) && \
-    make install && \
-    echo "gem: --no-document" >> /usr/local/etc/gemrc && \
-    gem update --system && \
-    container_build_log add "Ruby" "${RUBY_VERSION}" "${RUBY_REPO_URL}" && \
     \
     npm install --global \
                             svgo \
@@ -182,16 +150,19 @@ RUN echo "" && \
     container_build_log add "Discourse" "${DISCOURSE_VERSION}" "${DISCOURSE_REPO_URL}" && \
     package remove \
                     DISCOURSE_BUILD_DEPS \
-                    RUBY_BUILD_DEPS \
                     SHARED_BUILD_DEPS \
                     && \
     package cleanup && \
     rm -rf \
+            /app/.cursor \
             /app/.devcontainer \
             /app/.editorconfig \
             /app/.github \
             /app/.prettier* \
+            /app/.skills \
+            /app/.vscode \
             /app/.vscode-sample \
+            /app/.zed \
             /app/bin/docker \
             /app/AGENTS.md \
             /app/AI-AGENTS.md \
@@ -214,7 +185,7 @@ RUN echo "" && \
             /app/lefthook.yml \
             /app/test \
             /app/translator.yml \
-            /app/vendor/bundle/ruby/${RUBY_VERSION:0:3}/cache/* \
+            /app/vendor/bundle/ruby/*/cache/* \
             && \
     package remove && \
     package cleanup

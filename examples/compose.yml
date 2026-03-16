@@ -46,7 +46,7 @@ services:
 
   discourse-db:
     container_name: discourse-db
-    image: docker.io/nfrastack/postgres:17
+    image: docker.io/nfrastack/postgres:18
     volumes:
       - ./db:/data
     environment:
@@ -60,7 +60,7 @@ services:
       - services
 
   discourse-redis:
-    image: docker.io/nfrastack/redis:8-3.0.0
+    image: docker.io/nfrastack/redis:8
     container_name: discourse-redis
     environment:
       - TIMEZONE=America/Vancouver
