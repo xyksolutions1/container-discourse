@@ -8,13 +8,16 @@ services:
       - traefik.http.routers.discourse-example-com.rule=Host(`discourse.example.com`)
       - traefik.http.services.discourse-example-com.loadbalancer.server.port=3000
     volumes:
-      - ./logs:/data/logs
+      - ./logs:/logs
       - ./data/uploads:/data/uploads
       - ./data/backups:/data/backups
+      - ./data/plugins:/data/plugins
     ports:
       - 3000:3000
     environment:
       - TIMEZONE=America/Vancouver
+
+      - ENABLE_NGINX=FALSE
 
       - DB_HOST=discourse-db
       - DB_NAME=discourse
@@ -36,8 +39,10 @@ services:
       - SMTP_DISABLE_STARTTLS=true
       - SMTP_PORT=25
       - SMTP_HOST=postfix-relay
+
       #- ENABLE_DB_MIGRATE=FALSE
       #- ENABLE_PRECOMPILE_ASSETS=FALSE
+
       - DEVELOPER_EMAILS=hostmaster@example.com
     restart: always
     networks:
