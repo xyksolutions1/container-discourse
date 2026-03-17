@@ -20,6 +20,8 @@ LABEL \
 ARG \
     DISCOURSE_VERSION="v2026.2.0" \
     DISCOURSE_REPO_URL="https://github.com/discourse/discourse" \
+    ruby_version="3.4" \
+    NODE_VERSION="24" \
     OXIPNG_VERSION="v9.1.5" \
     OXIPNG_REPO_URL="https://github.com/oxipng/oxipng" \
     DISCOURSE_USER \
@@ -49,6 +51,17 @@ RUN echo "" && \
                 10-nginx/NGINX_PROXY_URL=http://127.0.0.1:[env:LISTEN_PORT] \
               " \
               && \
+    DISCOURSE_BUILD_DEPS_ALPINE=" \
+                                        gettext \
+                                        bzip2-dev \
+                                        freetype-dev \
+                                        icu-dev \
+                                        jpeg-dev \
+                                        postgresql-dev \
+                                        #libtiff-dev \
+                                        libxml2-dev \
+                                        libxslt-dev \
+                                " && \
     DISCOURSE_BUILD_DEPS_DEBIAN=" \
                                         gettext \
                                         libbz2-dev \
@@ -60,6 +73,29 @@ RUN echo "" && \
                                         libxml2-dev \
                                         libxslt-dev \
                                 " && \
+    DISCOURSE_RUN_DEPS_ALPINE=" \
+                                advancecomp \
+                                brotli \
+                                ghostscript \
+                                gifsicle \
+                                git \
+                                #gsfonts \
+                                imagemagick \
+                                #jhead \
+                                jpegoptim \
+                                icu-libs \
+                                libjpeg-turbo \
+                                libjpeg-turbo-utils \
+                                postgresql-libs \
+                                libxml2 \
+                                netcat-openbsd \
+                                nodejs \
+                                npm \
+                                optipng \
+                                pngquant \
+                                postgresql-client \
+                                unzip \
+                              " && \
     DISCOURSE_RUN_DEPS_DEBIAN=" \
                                     advancecomp \
                                     brotli \
@@ -82,6 +118,16 @@ RUN echo "" && \
                                     postgresql-contrib \
                                     unzip \
                               " && \
+    SHARED_BUILD_DEPS_ALPINE="  \
+                                bison \
+                                build-base \
+                                g++ \
+                                gcc \
+                                openssl-dev \
+                                make \
+                                patch \
+                                pkgconfig \
+                            " && \
     SHARED_BUILD_DEPS_DEBIAN="  \
                                 bison \
                                 build-essential \
@@ -96,7 +142,7 @@ RUN echo "" && \
     source /container/base/functions/container/build && \
     container_build_log image && \
     create_user "${DISCOURSE_USER}" 9009 "${DISCOURSE_GROUP}" 9009 /app && \
-    package repo add node 24 && \
+    package repo add node ${NODE_VERSION} && \
     package repo add postgres && \
     package update && \
     package upgrade && \
@@ -107,7 +153,7 @@ RUN echo "" && \
                     SHARED_RUN_DEPS \
                     && \
     \
-    package build ruby 3.4 && \
+    package build ruby ${ruby_version} && \
     \
     mkdir -p /usr/src/oxipng && \
     curl -sSL "${OXIPNG_REPO_URL}"/releases/download/"${OXIPNG_VERSION}"/oxipng-"${OXIPNG_VERSION/v/}"-$(container_info arch)-unknown-linux-gnu.tar.gz | tar xvfz - --strip 1 -C /usr/src/oxipng && \
@@ -152,7 +198,6 @@ RUN echo "" && \
                     DISCOURSE_BUILD_DEPS \
                     SHARED_BUILD_DEPS \
                     && \
-    package cleanup && \
     rm -rf \
             /app/.cursor \
             /app/.devcontainer \
@@ -187,7 +232,7 @@ RUN echo "" && \
             /app/translator.yml \
             /app/vendor/bundle/ruby/*/cache/* \
             && \
-    package remove && \
+    \
     package cleanup
 
 COPY rootfs /
