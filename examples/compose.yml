@@ -42,7 +42,6 @@ services:
 
       #- ENABLE_DB_MIGRATE=FALSE
       #- ENABLE_PRECOMPILE_ASSETS=FALSE
-
       - DEVELOPER_EMAILS=hostmaster@example.com
     restart: always
     networks:

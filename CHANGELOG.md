@@ -1,12 +1,16 @@
-## 3.3.0pre 2025-10-15++ <code at nfrastack dot com>
+## 4.0.0 2026-03-31 <code at nfastack dot com>
 
-   ### Changed
+   ### Added
       - Switched base image to nfrastack/nginx:8.x
       - Debian Trixie
       - Node 24
       - Ruby 3.4.8
-      - Discourse 26.2.0
-      - No plugin support, WIP
+      - Discourse 26.3.0
+      - Plugin Tool added to support plugin installation
+
+   ### Changed
+      - Have a look at the README, many environment variables have changed along with paths
+
 
 ## 3.2.99 2025-10-09 <dave at tiredofit dot ca>
 

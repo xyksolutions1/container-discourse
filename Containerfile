@@ -18,7 +18,7 @@ LABEL \
         org.opencontainers.image.licenses="MIT"
 
 ARG \
-    DISCOURSE_VERSION="v2026.2.1" \
+    DISCOURSE_VERSION="v2026.3.0" \
     DISCOURSE_REPO_URL="https://github.com/discourse/discourse" \
     ruby_version="3.4" \
     NODE_VERSION="24" \
@@ -58,7 +58,6 @@ RUN echo "" && \
                                         icu-dev \
                                         jpeg-dev \
                                         postgresql-dev \
-                                        #libtiff-dev \
                                         libxml2-dev \
                                         libxslt-dev \
                                 " && \
@@ -79,9 +78,9 @@ RUN echo "" && \
                                 ghostscript \
                                 gifsicle \
                                 git \
-                                #gsfonts \
+                                ghostscript-fonts \
                                 imagemagick \
-                                #jhead \
+                                jhead@testing \
                                 jpegoptim \
                                 icu-libs \
                                 libjpeg-turbo \
