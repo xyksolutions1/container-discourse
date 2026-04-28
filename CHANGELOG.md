@@ -1,3 +1,9 @@
+## 4.0.1 2026-04-28 <code at nfrastack dot com>
+
+   ### Added
+      - Discourse 2026.4.0
+
+
 ## 4.0.0 2026-03-31 <code at nfastack dot com>
 
    ### Added
