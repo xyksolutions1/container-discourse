@@ -5,16 +5,16 @@
 ARG \
     BASE_IMAGE
 
-FROM ${BASE_IMAGE}
+FROM docker.io/xyksolutions1/container-base:main
 
 LABEL \
         org.opencontainers.image.title="Discourse" \
         org.opencontainers.image.description="Forum software" \
-        org.opencontainers.image.url="https://hub.docker.com/r/nfrastack/discourse" \
-        org.opencontainers.image.documentation="https://github.com/nfrastack/container-discourse/blob/main/README.md" \
-        org.opencontainers.image.source="https://github.com/nfrastack/container-discourse.git" \
-        org.opencontainers.image.authors="Nfrastack <code@nfrastack.com>" \
-        org.opencontainers.image.vendor="Nfrastack <https://www.nfrastack.com>" \
+        org.opencontainers.image.url="https://hub.docker.com/r/xyksolutions1/discourse" \
+        org.opencontainers.image.documentation="https://github.com/xyksolutions1/container-discourse/blob/main/README.md" \
+        org.opencontainers.image.source="https://github.com/xyksolutions1/container-discourse.git" \
+        org.opencontainers.image.authors="xyksolutions1" \
+        org.opencontainers.image.vendor="xyksolutions1" \
         org.opencontainers.image.licenses="MIT"
 
 ARG \
@@ -39,8 +39,8 @@ ENV \
     RUBY_GC_MALLOC_LIMIT=90000000 \
     RUBY_GLOBAL_METHOD_CACHE_SIZE=131072 \
     PATH=/usr/local/share/pnpm:${PATH} \
-    IMAGE_NAME="nfrastack/discourse" \
-    IMAGE_REPO_URL="https://github.com/nfrastack/container-discourse/"
+    IMAGE_NAME="xyksolutions1/discourse" \
+    IMAGE_REPO_URL="https://github.com/xyksolutions1/container-discourse/"
 
 EXPOSE 3000
 
